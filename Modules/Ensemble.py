@@ -851,6 +851,7 @@ Error, the following stress files are missing from the ensemble:
         """
         LOAD THE ENSEMBLE FROM ASE's ATOMS OBJECT
         =========================================
+        mindscraper
         """
 
         assert __ASE__, "ASE library required to load from the calculator output file."
