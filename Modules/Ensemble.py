@@ -847,6 +847,91 @@ Error, the following stress files are missing from the ensemble:
         else:
             self.init()
 
+    def load_from_ase_atoms(self, atoms, timer=None):
+        """
+        LOAD THE ENSEMBLE FROM ASE's ATOMS OBJECT
+        =========================================
+        """
+
+        assert __ASE__, "ASE library required to load from the calculator output file."
+
+        self.N = len(atoms)
+        nat_sc = np.prod(self.supercell) * self.dyn_0.structure.N_atoms
+
+        self.forces = np.zeros( (self.N, nat_sc, 3), order = "F", dtype = np.float64)
+        self.xats = np.zeros( (self.N, nat_sc, 3), order = "C", dtype = np.float64)
+
+        self.stresses = np.zeros( (self.N, 3,3), order = "F", dtype = np.float64)
+
+        self.sscha_energies = np.zeros(self.N, dtype = np.float64)
+        self.energies = np.zeros(self.N, dtype = np.float64)
+        self.sscha_forces = np.zeros( (self.N, nat_sc, 3), order = "F", dtype = np.float64)
+
+        self.u_disps = np.zeros( (self.N, nat_sc * 3), order = "F", dtype = np.float64)
+
+        # Initialize the computation of energy and forces
+        self.force_computed = np.ones(self.N, dtype = bool)
+        self.stress_computed = np.ones(self.N, dtype = bool)
+        self.all_properties = [None] * self.N
+
+        # Add a counter to check if all the stress tensors are present
+        count_stress = 0
+
+        # Superstructure
+        dyn_supercell = self.dyn_0.GenerateSupercellDyn(self.supercell)
+        super_structure = dyn_supercell.structure
+        super_fc = dyn_supercell.dynmats[0]
+
+        self.structures = []
+
+        for i in range(len(atoms)):
+            ase_struct = atoms[i]
+
+            # Get the structure
+            structure = CC.Structure.Structure()
+            structure.generate_from_ase_atoms(ase_struct)
+
+            self.xats[i, :, :] = structure.coords
+            self.structures.append(structure)
+
+            # Get the displacement [ANGSTROM]
+            self.u_disps[i,:] = structure.get_displacement(super_structure).reshape( 3 * nat_sc)
+
+            # Get the energy
+            energy = ase_struct.get_potential_energy()
+            energy /= Rydberg
+            self.energies[i] = energy
+
+            # Get the forces [eV/A -> Ry/A]
+            forces = ase_struct.get_forces() / Rydberg
+            self.forces[i, :, :] = forces
+
+            # Get the stress if any
+            try:
+                stress = - ase_struct.get_stress(voigt=False)
+                # eV/A^3 -> Ry/bohr^3
+                stress /= Rydberg / Bohr**3
+                count_stress += 1
+                self.stresses[i, :, :] = stress
+            except:
+                pass
+
+        self.rho = np.ones(self.N, dtype = np.float64)
+
+        t1 = time.time()
+        # self.q_start = CC.Manipulate.GetQ_vectors(self.structures, dyn_supercell, self.u_disps)
+        t2 = time.time()
+        # self.current_q = self.q_start.copy()
+
+        if count_stress == self.N:
+            self.has_stress = True
+        else:
+            self.has_stress = False
+
+        if timer:
+            timer.execute_timed_function(self.init)
+        else:
+            self.init()
 
     def save(self, data_dir, population, use_alat = False):
         """
