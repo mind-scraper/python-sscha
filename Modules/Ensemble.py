@@ -1433,7 +1433,95 @@ Error, the following stress files are missing from the ensemble:
                 bg
             )
 
-
+    def generate_fix_elements(self, N, evenodd = True, project_on_modes = None, sobol = False, 
+                 sobol_scramble = False, sobol_scatter = 0.0, fix_elements = None):
+        """
+        GENERATE THE ENSEMBLE WITH FIXED ATOM ELEMENTS
+        ==============================================
+    
+        Parameters
+        ----------
+            N : int
+                The number of random configurations to be extracted
+            evenodd : bool, optional
+                If true for each configuration also the opposite is extracted
+            project_on_modes : ndarray(size=(3*nat_sc, nproj)), optional
+                If different from None the displacements are projected on the
+                given modes.
+            sobol : bool, optional (Default = False)
+                 Defines if the calculation uses random Gaussian generator or Sobol Gaussian generator.
+            sobol_scramble : bool, optional (Default = False)
+                Set the optional scrambling of the generated numbers taken from the Sobol sequence.
+            sobol_scatter : real (0.0 to 1) (Default = 0.0)
+                Set the scatter parameter to displace the Sobol positions randomly.
+            fix_elements : list of str, optional (Default = None)
+                Atomic element symbols to keep fixed at their equilibrium 
+                positions (e.g. ["Cu", "C"] or "Cu").
+        """
+    
+        if evenodd and (N % 2 != 0):
+            raise ValueError("Error, evenodd allowed only with an even number of random structures")
+    
+        self.N = N
+        Nat_sc = np.prod(self.supercell) * self.dyn_0.structure.N_atoms
+        self.structures = []
+        super_struct = self.dyn_0.structure.generate_supercell(self.dyn_0.GetSupercell())
+    
+        # Format fix_elements as a list if passed as a single string (e.g., "Cu")
+        if isinstance(fix_elements, str):
+            fix_elements = [fix_elements]
+    
+        # Find matching atom indices in the supercell
+        fix_indices = []
+        if fix_elements is not None and len(fix_elements) > 0:
+            fix_indices = [idx for idx, atom in enumerate(super_struct.atoms) if atom in fix_elements]
+    
+        # Helper function to reset fixed atom positions to reference positions
+        def apply_atom_fix(struct):
+            if len(fix_indices) > 0:
+                struct.coords[fix_indices, :] = super_struct.coords[fix_indices, :]
+    
+        structures = []
+        if evenodd:
+            structs = self.dyn_0.ExtractRandomStructures(
+                N // 2, self.T0, 
+                project_on_vectors = project_on_modes, 
+                lock_low_w = self.ignore_small_w, 
+                sobol = sobol, 
+                sobol_scramble = sobol_scramble, 
+                sobol_scatter = sobol_scatter
+            )
+    
+            for i, s in enumerate(structs):
+                # Apply fix to the sampled structure
+                apply_atom_fix(s)
+                structures.append(s)
+    
+                # Get the opposite displacement structure
+                new_s = s.copy()
+                new_s.coords = super_struct.coords - new_s.get_displacement(super_struct)
+                
+                # Apply fix to the opposite displacement structure as well
+                apply_atom_fix(new_s)
+                structures.append(new_s)
+        else:
+            structs = self.dyn_0.ExtractRandomStructures(
+                N, self.T0, 
+                project_on_vectors = project_on_modes, 
+                lock_low_w = self.ignore_small_w, 
+                sobol = sobol, 
+                sobol_scramble = sobol_scramble, 
+                sobol_scatter = sobol_scatter
+            )
+    
+            for s in structs:
+                apply_atom_fix(s)
+                structures.append(s)
+    
+        # Enforce all the processors to share the same structures
+        structures = CC.Settings.broadcast(structures)
+    
+        self.init_from_structures(structures)
 
     def generate(self, N, evenodd = True, project_on_modes = None, sobol = False, sobol_scramble = False, sobol_scatter = 0.0):
         """
