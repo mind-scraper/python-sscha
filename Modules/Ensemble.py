@@ -1523,118 +1523,118 @@ Error, the following stress files are missing from the ensemble:
     
         self.init_from_structures(structures)
 
-def generate_fix_atoms(
-    self,
-    N,
-    evenodd=True,
-    project_on_modes=None,
-    sobol=False,
-    sobol_scramble=False,
-    sobol_scatter=0.0,
-    fix_atoms=None,
-):
-    """
-    GENERATE THE ENSEMBLE WITH FIXED ATOM INDICES
-    ============================================
-
-    Parameters
-    ----------
-        N : int
-            The number of random configurations to be extracted.
-        evenodd : bool, optional
-            If True, for each configuration also the opposite is extracted.
-        project_on_modes : ndarray(size=(3*nat_sc, nproj)), optional
-            If different from None the displacements are projected on the
-            given modes.
-        sobol : bool, optional (Default = False)
-            Defines if the calculation uses random Gaussian generator or
-            Sobol Gaussian generator.
-        sobol_scramble : bool, optional (Default = False)
-            Set the optional scrambling of the generated numbers taken from
-            the Sobol sequence.
-        sobol_scatter : float, optional (Default = 0.0)
-            Set the scatter parameter to displace the Sobol positions randomly.
-        fix_atoms : list of int or int, optional (Default = None)
-            Atom indices in the supercell to keep fixed at their equilibrium
-            positions (e.g. [0, 1, 5]).
-    """
-
-    if evenodd and (N % 2 != 0):
-        raise ValueError(
-            "Error, evenodd allowed only with an even number of random structures"
-        )
-
-    self.N = N
-    Nat_sc = np.prod(self.supercell) * self.dyn_0.structure.N_atoms
-    self.structures = []
-    super_struct = self.dyn_0.structure.generate_supercell(
-        self.dyn_0.GetSupercell()
-    )
-
-    # Convert a single integer into a list
-    if isinstance(fix_atoms, int):
-        fix_atoms = [fix_atoms]
-
-    # Validate indices
-    fix_indices = []
-    if fix_atoms is not None:
-        fix_indices = list(fix_atoms)
-        for idx in fix_indices:
-            if idx < 0 or idx >= Nat_sc:
-                raise IndexError(
-                    f"Atom index {idx} is out of range (0 <= index < {Nat_sc})"
-                )
-
-    # Helper function to restore fixed atoms to equilibrium positions
-    def apply_atom_fix(struct):
-        if fix_indices:
-            struct.coords[fix_indices, :] = super_struct.coords[fix_indices, :]
-
-    structures = []
-
-    if evenodd:
-        structs = self.dyn_0.ExtractRandomStructures(
-            N // 2,
-            self.T0,
-            project_on_vectors=project_on_modes,
-            lock_low_w=self.ignore_small_w,
-            sobol=sobol,
-            sobol_scramble=sobol_scramble,
-            sobol_scatter=sobol_scatter,
-        )
-
-        for s in structs:
-            apply_atom_fix(s)
-            structures.append(s)
-
-            new_s = s.copy()
-            new_s.coords = (
-                super_struct.coords
-                - new_s.get_displacement(super_struct)
+    def generate_fix_atoms(
+        self,
+        N,
+        evenodd=True,
+        project_on_modes=None,
+        sobol=False,
+        sobol_scramble=False,
+        sobol_scatter=0.0,
+        fix_atoms=None,
+    ):
+        """
+        GENERATE THE ENSEMBLE WITH FIXED ATOM INDICES
+        ============================================
+    
+        Parameters
+        ----------
+            N : int
+                The number of random configurations to be extracted.
+            evenodd : bool, optional
+                If True, for each configuration also the opposite is extracted.
+            project_on_modes : ndarray(size=(3*nat_sc, nproj)), optional
+                If different from None the displacements are projected on the
+                given modes.
+            sobol : bool, optional (Default = False)
+                Defines if the calculation uses random Gaussian generator or
+                Sobol Gaussian generator.
+            sobol_scramble : bool, optional (Default = False)
+                Set the optional scrambling of the generated numbers taken from
+                the Sobol sequence.
+            sobol_scatter : float, optional (Default = 0.0)
+                Set the scatter parameter to displace the Sobol positions randomly.
+            fix_atoms : list of int or int, optional (Default = None)
+                Atom indices in the supercell to keep fixed at their equilibrium
+                positions (e.g. [0, 1, 5]).
+        """
+    
+        if evenodd and (N % 2 != 0):
+            raise ValueError(
+                "Error, evenodd allowed only with an even number of random structures"
             )
-
-            apply_atom_fix(new_s)
-            structures.append(new_s)
-
-    else:
-        structs = self.dyn_0.ExtractRandomStructures(
-            N,
-            self.T0,
-            project_on_vectors=project_on_modes,
-            lock_low_w=self.ignore_small_w,
-            sobol=sobol,
-            sobol_scramble=sobol_scramble,
-            sobol_scatter=sobol_scatter,
+    
+        self.N = N
+        Nat_sc = np.prod(self.supercell) * self.dyn_0.structure.N_atoms
+        self.structures = []
+        super_struct = self.dyn_0.structure.generate_supercell(
+            self.dyn_0.GetSupercell()
         )
-
-        for s in structs:
-            apply_atom_fix(s)
-            structures.append(s)
-
-    # Enforce all processors to share the same structures
-    structures = CC.Settings.broadcast(structures)
-
-    self.init_from_structures(structures)
+    
+        # Convert a single integer into a list
+        if isinstance(fix_atoms, int):
+            fix_atoms = [fix_atoms]
+    
+        # Validate indices
+        fix_indices = []
+        if fix_atoms is not None:
+            fix_indices = list(fix_atoms)
+            for idx in fix_indices:
+                if idx < 0 or idx >= Nat_sc:
+                    raise IndexError(
+                        f"Atom index {idx} is out of range (0 <= index < {Nat_sc})"
+                    )
+    
+        # Helper function to restore fixed atoms to equilibrium positions
+        def apply_atom_fix(struct):
+            if fix_indices:
+                struct.coords[fix_indices, :] = super_struct.coords[fix_indices, :]
+    
+        structures = []
+    
+        if evenodd:
+            structs = self.dyn_0.ExtractRandomStructures(
+                N // 2,
+                self.T0,
+                project_on_vectors=project_on_modes,
+                lock_low_w=self.ignore_small_w,
+                sobol=sobol,
+                sobol_scramble=sobol_scramble,
+                sobol_scatter=sobol_scatter,
+            )
+    
+            for s in structs:
+                apply_atom_fix(s)
+                structures.append(s)
+    
+                new_s = s.copy()
+                new_s.coords = (
+                    super_struct.coords
+                    - new_s.get_displacement(super_struct)
+                )
+    
+                apply_atom_fix(new_s)
+                structures.append(new_s)
+    
+        else:
+            structs = self.dyn_0.ExtractRandomStructures(
+                N,
+                self.T0,
+                project_on_vectors=project_on_modes,
+                lock_low_w=self.ignore_small_w,
+                sobol=sobol,
+                sobol_scramble=sobol_scramble,
+                sobol_scatter=sobol_scatter,
+            )
+    
+            for s in structs:
+                apply_atom_fix(s)
+                structures.append(s)
+    
+        # Enforce all processors to share the same structures
+        structures = CC.Settings.broadcast(structures)
+    
+        self.init_from_structures(structures)
     
     
     def generate(self, N, evenodd = True, project_on_modes = None, sobol = False, sobol_scramble = False, sobol_scatter = 0.0):
